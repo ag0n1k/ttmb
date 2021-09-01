@@ -43,31 +43,40 @@ def start(update: Update, context: CallbackContext) -> None:
 
 def run(update: Update, context: CallbackContext) -> None:
     """Sends explanation on how to use the bot."""
-    context.user_data['category'] = {}
-    context.user_data['category']['test'] = State('test')
-    context.user_data['category']['test'].start()
-    context.user_data['current'] = context.user_data['category']['test']
+    global global_start
+    if context.user_data.get('category', None):
+        stat(update, context)
+    context.user_data['category'] = []
+    context.user_data['current'] = State('test')
+    context.user_data['category'].append(context.user_data['current'])
+    context.user_data['current'].start()
     update.message.reply_text(f'Started test at {context.user_data["current"].started}')
+    global_start = datetime.now()
 
 
 def stat(update: Update, context: CallbackContext) -> None:
     """Sends explanation on how to use the bot."""
-    res = "\n".join([f"{k} : {v}" for k, v in context.user_data["category"].items()])
-    update.message.reply_text('Started at {global_start}, spent {spent}\n'
+    res = {}
+    for i in context.user_data["category"]:
+        item = res.get(i.name, None)
+        if not item:
+            res.update({i.name: i})
+        else:
+            res.update({i.name: i+item})
+
+    update.message.reply_text('Started at {global_start}\nSpent {spent}\n'
                               'Stat:\n{res:>20}'.format(global_start=global_start, spent=datetime.now() - global_start,
-                                                        res=res))
+                                                        res="\n".join([f"{k} : {v}" for k, v in res.items()])))
 
 
 def change(update: Update, context: CallbackContext) -> None:
-    state = context.user_data['category'].get(update.message.text, None)
-    if not state:
-        state = State(update.message.text)
-        state.start()
     context.user_data['current'].end()
+    state = State(update.message.text)
+    state.start()
     update.message.reply_text(
         f'Spent on {context.user_data["current"].name} {context.user_data["current"].get_period()}')
     context.user_data['current'] = state
-    context.user_data['category'][update.message.text] = state
+    context.user_data['category'].append(state)
 
 
 def alarm(context: CallbackContext) -> None:
