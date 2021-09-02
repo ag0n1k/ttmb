@@ -47,10 +47,10 @@ def run(update: Update, context: CallbackContext) -> None:
     if context.user_data.get('category', None):
         stat(update, context)
     context.user_data['category'] = []
-    context.user_data['current'] = State('test')
+    context.user_data['current'] = State('start')
     context.user_data['category'].append(context.user_data['current'])
     context.user_data['current'].start()
-    update.message.reply_text(f'Started test at {context.user_data["current"].started}')
+    update.message.reply_text(f'Started start at {context.user_data["current"].started}')
     global_start = datetime.now()
 
 
@@ -71,7 +71,7 @@ def stat(update: Update, context: CallbackContext) -> None:
 
 def change(update: Update, context: CallbackContext) -> None:
     context.user_data['current'].end()
-    state = State(update.message.text)
+    state = State(update.message.text.lower())
     state.start()
     update.message.reply_text(
         f'Spent on {context.user_data["current"].name} {context.user_data["current"].get_period()}')
