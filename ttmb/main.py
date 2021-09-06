@@ -28,7 +28,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 global_start = datetime.now()
-
+global_period = 25*60
 
 # Define a few command handlers. These usually take the two arguments update and
 # context. Error handlers also receive the raised TelegramError object in error.
@@ -52,6 +52,7 @@ def run(update: Update, context: CallbackContext) -> None:
     context.user_data['current'].start()
     update.message.reply_text(f'Started start at {context.user_data["current"].started}')
     global_start = datetime.now()
+    remove_job_if_exists(str(update.message.chat_id), context)
 
 
 def stat(update: Update, context: CallbackContext) -> None:
@@ -64,8 +65,9 @@ def stat(update: Update, context: CallbackContext) -> None:
         else:
             res.update({i.name: i+item})
 
-    update.message.reply_text('Started at {global_start}\nSpent {spent}\n'
+    update.message.reply_text('Started at {global_start}\nSpent {spent}\nPeriod {period} min\n\n'
                               'Stat:\n{res:>20}'.format(global_start=global_start, spent=datetime.now() - global_start,
+                                                        period=global_period / 60,
                                                         res="\n".join([f"{k} : {v}" for k, v in res.items()])))
 
 
@@ -78,11 +80,15 @@ def change(update: Update, context: CallbackContext) -> None:
     context.user_data['current'] = state
     context.user_data['category'].append(state)
 
+    remove_job_if_exists(str(update.message.chat_id), context)
+    context.job_queue.run_repeating(callback=alarm, interval=global_period, context=update.message.chat_id,
+                                    name=str(update.message.chat_id))
+
 
 def alarm(context: CallbackContext) -> None:
     """Send the alarm message."""
     job = context.job
-    context.bot.send_message(job.context, text='Beep!')
+    context.bot.send_message(job.context, text='You have to break! 5 minutes')
 
 
 def remove_job_if_exists(name: str, context: CallbackContext) -> bool:
@@ -97,22 +103,15 @@ def remove_job_if_exists(name: str, context: CallbackContext) -> bool:
 
 def set_timer(update: Update, context: CallbackContext) -> None:
     """Add a job to the queue."""
-    chat_id = update.message.chat_id
+    global global_period
     try:
         # args[0] should contain the time for the timer in seconds
         due = int(context.args[0])
         if due < 0:
             update.message.reply_text('Sorry we can not go back to future!')
             return
-
-        job_removed = remove_job_if_exists(str(chat_id), context)
-        context.job_queue.run_once(alarm, due, context=chat_id, name=str(chat_id))
-
-        text = 'Timer successfully set!'
-        if job_removed:
-            text += ' Old one was removed.'
-        update.message.reply_text(text)
-
+        global_period = 60 * due
+        update.message.reply_text(f'Timer successfully set to {global_period}')
     except (IndexError, ValueError):
         update.message.reply_text('Usage: /set <seconds>')
 
@@ -138,7 +137,6 @@ def main() -> None:
     dispatcher.add_handler(CommandHandler("run", run))
     dispatcher.add_handler(CommandHandler("help", start))
     dispatcher.add_handler(CommandHandler("set", set_timer))
-    dispatcher.add_handler(CommandHandler("unset", unset))
     dispatcher.add_handler(CommandHandler("stat", stat))
     dispatcher.add_handler(MessageHandler(Filters.all, change))
     # Start the Bot
